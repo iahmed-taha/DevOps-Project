@@ -1,0 +1,57 @@
+pipeline {
+    agent any
+    
+    environment {
+        // Ensure you have added these credentials in Jenkins > Manage Credentials
+        DOCKER_HUB_CREDS = credentials('dockerhub-credentials-id')
+        DOCKER_USERNAME = 'yourdockerhubusername' 
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
+    }
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build Docker Images') {
+            steps {
+                script {
+                    echo "Building Frontend Image..."
+                    sh "docker build -t ${DOCKER_USERNAME}/app-frontend:${IMAGE_TAG} ./frontend"
+                    
+                    echo "Building Backend Image..."
+                    sh "docker build -t ${DOCKER_USERNAME}/app-backend:${IMAGE_TAG} ./backend"
+                }
+            }
+        }
+
+        stage('Push to Registry') {
+            steps {
+                script {
+                    sh "echo \$DOCKER_HUB_CREDS_PSW | docker login -u \$DOCKER_HUB_CREDS_USR --password-stdin"
+                    
+                    echo "Pushing Frontend Image..."
+                    sh "docker push ${DOCKER_USERNAME}/app-frontend:${IMAGE_TAG}"
+                    sh "docker push ${DOCKER_USERNAME}/app-frontend:latest" // Optional: tag as latest
+                    
+                    echo "Pushing Backend Image..."
+                    sh "docker push ${DOCKER_USERNAME}/app-backend:${IMAGE_TAG}"
+                    sh "docker push ${DOCKER_USERNAME}/app-backend:latest"
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            script {
+                echo "Cleaning up local Docker images to free space on Jenkins server..."
+                sh "docker rmi ${DOCKER_USERNAME}/app-frontend:${IMAGE_TAG} || true"
+                sh "docker rmi ${DOCKER_USERNAME}/app-backend:${IMAGE_TAG} || true"
+                sh "docker logout"
+            }
+        }
+    }
+}
